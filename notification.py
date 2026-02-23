@@ -1,6 +1,8 @@
 import os
 import smtplib
 import logging
+import socket
+import ssl
 import itchat
 import itchat.content
 from email.mime.text import MIMEText
@@ -12,6 +14,8 @@ import time
 from wechat_utils import WeChatManager
 
 class NotificationManager:
+    SMTP_TIMEOUT = 30
+
     def __init__(self):
         self.wechat_manager = None
         if NOTIFICATION_CONFIG['method'] in ['wechat', 'both']:
@@ -34,10 +38,15 @@ class NotificationManager:
 
     def _send_email(self, subject, body, attachments=None):
         """发送邮件通知"""
+        smtp_server = EMAIL_CONFIG['smtp_server']
+        smtp_port = int(EMAIL_CONFIG['smtp_port'])
+        sender = EMAIL_CONFIG['sender_email']
+        recipient = EMAIL_CONFIG['recipient_email']
+
         try:
             msg = MIMEMultipart()
-            msg['From'] = EMAIL_CONFIG['sender_email']
-            msg['To'] = EMAIL_CONFIG['recipient_email']
+            msg['From'] = sender
+            msg['To'] = recipient
             msg['Subject'] = subject
 
             msg.attach(MIMEText(body, 'html'))
@@ -49,21 +58,78 @@ class NotificationManager:
                     part['Content-Disposition'] = f'attachment; filename="{os.path.basename(filepath)}"'
                     msg.attach(part)
 
-            with smtplib.SMTP(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port']) as server:
-                server.ehlo()
-                server.starttls()
-                server.ehlo()
-                logging.info("Attempting to login to Gmail...")
-                server.login(EMAIL_CONFIG['sender_email'], EMAIL_CONFIG['sender_password'])
-                logging.info("Login successful, sending email...")
-                server.send_message(msg)
-                
+            # 先验证 DNS 和 TCP 连通性，便于快速判断问题层级
+            self._log_smtp_probe(smtp_server, smtp_port)
+
+            ssl_context = ssl.create_default_context()
+            logging.info(
+                f"SMTP send start: server={smtp_server}, port={smtp_port}, "
+                f"from={self._mask_email(sender)}, to={self._mask_email(recipient)}"
+            )
+
+            if smtp_port == 465:
+                # 465 使用隐式 SSL，不应再调用 STARTTLS
+                with smtplib.SMTP_SSL(
+                    smtp_server,
+                    smtp_port,
+                    timeout=self.SMTP_TIMEOUT,
+                    context=ssl_context
+                ) as server:
+                    logging.info("SMTP stage: connected via SMTP_SSL")
+                    server.ehlo()
+                    logging.info("SMTP stage: EHLO success")
+                    server.login(sender, EMAIL_CONFIG['sender_password'])
+                    logging.info("SMTP stage: LOGIN success")
+                    server.send_message(msg)
+                    logging.info("SMTP stage: SEND success")
+            else:
+                # 587/25 等端口通常为明文连接后升级 STARTTLS
+                with smtplib.SMTP(smtp_server, smtp_port, timeout=self.SMTP_TIMEOUT) as server:
+                    logging.info("SMTP stage: connected via SMTP")
+                    server.ehlo()
+                    logging.info("SMTP stage: EHLO success")
+                    server.starttls(context=ssl_context)
+                    logging.info("SMTP stage: STARTTLS success")
+                    server.ehlo()
+                    logging.info("SMTP stage: EHLO(after STARTTLS) success")
+                    server.login(sender, EMAIL_CONFIG['sender_password'])
+                    logging.info("SMTP stage: LOGIN success")
+                    server.send_message(msg)
+                    logging.info("SMTP stage: SEND success")
+
             logging.info(f"Email sent successfully: {subject}")
             return True
         except Exception as e:
             logging.error(f"Failed to send email: {str(e)}")
-            logging.error(f"Email configuration used: server={EMAIL_CONFIG['smtp_server']}, port={EMAIL_CONFIG['smtp_port']}")
+            logging.error(f"Email configuration used: server={smtp_server}, port={smtp_port}")
             return False
+
+    def _mask_email(self, address):
+        """对邮箱做最小脱敏，避免日志泄露完整账号"""
+        if not address or '@' not in address:
+            return address
+        local, domain = address.split('@', 1)
+        if len(local) <= 2:
+            masked_local = '*' * len(local)
+        else:
+            masked_local = local[:2] + '*' * (len(local) - 2)
+        return f"{masked_local}@{domain}"
+
+    def _log_smtp_probe(self, server, port):
+        """记录 DNS 和 TCP 探测信息，帮助定位网络问题"""
+        try:
+            addrs = socket.getaddrinfo(server, port, type=socket.SOCK_STREAM)
+            ip_list = sorted(set(item[4][0] for item in addrs))
+            logging.info(f"SMTP probe: DNS resolved {server}:{port} -> {ip_list}")
+        except Exception as e:
+            logging.warning(f"SMTP probe: DNS resolve failed for {server}:{port}: {str(e)}")
+            return
+
+        try:
+            with socket.create_connection((server, port), timeout=10):
+                logging.info(f"SMTP probe: TCP connect success to {server}:{port}")
+        except Exception as e:
+            logging.warning(f"SMTP probe: TCP connect failed to {server}:{port}: {str(e)}")
 
     def _format_wechat_message(self, subject, body, report_data=None):
         """格式化微信消息内容"""

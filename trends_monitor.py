@@ -5,7 +5,6 @@ import schedule
 import time
 import random
 from querytrends import batch_get_queries, save_related_queries, RequestLimiter
-import json
 import logging
 import backoff
 import argparse
@@ -17,8 +16,7 @@ from config import (
     MONITOR_CONFIG,
     LOGGING_CONFIG,
     STORAGE_CONFIG,
-    TRENDS_CONFIG,
-    NOTIFICATION_CONFIG
+    TRENDS_CONFIG
 )
 from notification import NotificationManager
 
@@ -37,41 +35,6 @@ request_limiter = RequestLimiter()
 
 # 创建通知管理器实例
 notification_manager = NotificationManager()
-
-def send_email(subject, body, attachments=None):
-    """Send email with optional attachments"""
-    try:
-        msg = MIMEMultipart()
-        msg['From'] = EMAIL_CONFIG['sender_email']
-        msg['To'] = EMAIL_CONFIG['recipient_email']
-        msg['Subject'] = subject
-
-        msg.attach(MIMEText(body, 'html'))
-
-        if attachments:
-            for filepath in attachments:
-                with open(filepath, 'rb') as f:
-                    part = MIMEApplication(f.read(), Name=os.path.basename(filepath))
-                part['Content-Disposition'] = f'attachment; filename="{os.path.basename(filepath)}"'
-                msg.attach(part)
-
-        # Gmail使用SMTP然后升级到TLS
-        with smtplib.SMTP(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port']) as server:
-            server.ehlo()  # 可以帮助识别连接问题
-            server.starttls()  # 升级到TLS连接
-            server.ehlo()  # 重新识别
-            logging.info("Attempting to login to Gmail...")
-            server.login(EMAIL_CONFIG['sender_email'], EMAIL_CONFIG['sender_password'])
-            logging.info("Login successful, sending email...")
-            server.send_message(msg)
-            
-        logging.info(f"Email sent successfully: {subject}")
-        return True
-    except Exception as e:
-        logging.error(f"Failed to send email: {str(e)}")
-        logging.error(f"Email configuration used: server={EMAIL_CONFIG['smtp_server']}, port={EMAIL_CONFIG['smtp_port']}")
-        # 不要立即抛出异常，让程序继续运行
-        return False
 
 def create_daily_directory():
     """Create a directory for today's data"""
