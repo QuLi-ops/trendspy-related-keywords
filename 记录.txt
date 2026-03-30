@@ -1,0 +1,11 @@
+更新代码后重启服务即可：
+
+  cd /home/ubuntu/trendspy-related-keywords
+  git pull
+  sudo systemctl restart trends-monitor
+  
+sudo systemctl stop trends-monitor
+  sudo systemctl disable trends-monitor
+
+  - stop — 立即停止
+  - disable — 取消开机自启
