@@ -49,8 +49,8 @@ RATE_LIMIT_CONFIG = {
 
 # Schedule Configuration
 SCHEDULE_CONFIG = {
-    'hour': 23,                    # 计划执行的小时（0-23）
-    'minute': 5,                 # 计划执行的分钟（0-59）
+    'hour': 0,                     # 计划执行的小时（0-23），UTC 0:00 = 北京时间 8:00
+    'minute': 0,                  # 计划执行的分钟（0-59）
     'random_delay_minutes': 15   # 随机延迟的最大分钟数（可选）
 }
 
