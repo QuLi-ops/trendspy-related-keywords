@@ -308,6 +308,7 @@ SCHEDULE_CONFIG = {
 # Monitoring Configuration
 MONITOR_CONFIG = {
     'rising_threshold': 500,  # 高增长趋势阈值
+    'chart_timeframe': 'now 7-d',  # 邮件提醒中每个相关词的小图时间范围
 }
 
 # Logging Configuration

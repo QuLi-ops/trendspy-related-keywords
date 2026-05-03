@@ -8,6 +8,7 @@ import itchat.content
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
+from email.mime.image import MIMEImage
 from config import EMAIL_CONFIG, NOTIFICATION_CONFIG
 import pandas as pd
 import time
@@ -21,13 +22,13 @@ class NotificationManager:
         if NOTIFICATION_CONFIG['method'] in ['wechat', 'both']:
             self.wechat_manager = WeChatManager()
 
-    def send_notification(self, subject, body, attachments=None):
+    def send_notification(self, subject, body, attachments=None, inline_images=None):
         """发送通知，根据配置选择发送方式"""
         method = NOTIFICATION_CONFIG['method']
         success = True
 
         if method in ['email', 'both']:
-            email_success = self._send_email(subject, body, attachments)
+            email_success = self._send_email(subject, body, attachments, inline_images)
             success = success and email_success
 
         if method in ['wechat', 'both']:
@@ -36,7 +37,7 @@ class NotificationManager:
 
         return success
 
-    def _send_email(self, subject, body, attachments=None):
+    def _send_email(self, subject, body, attachments=None, inline_images=None):
         """发送邮件通知"""
         smtp_server = EMAIL_CONFIG['smtp_server']
         smtp_port = int(EMAIL_CONFIG['smtp_port'])
@@ -44,12 +45,22 @@ class NotificationManager:
         recipient = EMAIL_CONFIG['recipient_email']
 
         try:
-            msg = MIMEMultipart()
+            msg = MIMEMultipart('related')
             msg['From'] = sender
             msg['To'] = recipient
             msg['Subject'] = subject
 
-            msg.attach(MIMEText(body, 'html'))
+            alternative = MIMEMultipart('alternative')
+            alternative.attach(MIMEText(body, 'html'))
+            msg.attach(alternative)
+
+            if inline_images:
+                for content_id, filepath in inline_images.items():
+                    with open(filepath, 'rb') as f:
+                        image_part = MIMEImage(f.read())
+                    image_part.add_header('Content-ID', f'<{content_id}>')
+                    image_part.add_header('Content-Disposition', 'inline', filename=os.path.basename(filepath))
+                    msg.attach(image_part)
 
             if attachments:
                 for filepath in attachments:

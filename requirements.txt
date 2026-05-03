@@ -6,3 +6,4 @@ python-dotenv>=0.19.0
 urllib3<2.0.0  # 使用1.x版本避免SSL警告
 itchat-uos>=1.5.0.dev0  # 使用uos维护的版本，支持新版微信
 tabulate>=0.9.0  # 用于格式化表格输出 
+matplotlib>=3.5.0  # 用于生成邮件内嵌的7天趋势图

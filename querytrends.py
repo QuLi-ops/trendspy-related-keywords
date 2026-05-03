@@ -69,6 +69,58 @@ def get_related_queries(keyword, geo='', timeframe='today 12-m'):
             # 其他错误则直接抛出
             raise
 
+def get_interest_over_time(keyword, geo='', timeframe='now 7-d'):
+    """
+    获取单个关键词的时间趋势数据，默认用于邮件里的 7 天小图。
+    """
+    while True:
+        tr = Trends(hl='zh-CN')
+
+        user_agents = [
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0',
+            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        ]
+
+        headers = {
+            'referer': 'https://www.google.com/',
+            'User-Agent': random.choice(user_agents),
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+        }
+
+        try:
+            request_limiter.wait_if_needed()
+            time.sleep(random.uniform(1, 3))
+
+            trend_data = tr.interest_over_time(
+                [keyword],
+                headers=headers,
+                geo=geo,
+                timeframe=timeframe
+            )
+            print(f"成功获取趋势图数据: {keyword}")
+            return trend_data
+        except Exception as e:
+            error_msg = str(e)
+            print(f"尝试获取趋势图数据时出错: {error_msg}")
+
+            if "API quota exceeded" in error_msg:
+                wait_time = random.uniform(300, 360)
+                print(f"API配额超限，等待 {wait_time:.1f} 秒后重试...")
+                time.sleep(wait_time)
+                continue
+
+            if "'NoneType' object has no attribute 'raise_for_status'" in error_msg:
+                wait_time = random.uniform(60, 120)
+                print(f"请求返回为空，等待 {wait_time:.1f} 秒后重试...")
+                time.sleep(wait_time)
+                continue
+
+            raise
+
 def batch_get_queries(keywords, geo='', timeframe='today 12-m', delay_between_queries=5):
     """
     批量获取多个关键词的数据，带间隔控制
