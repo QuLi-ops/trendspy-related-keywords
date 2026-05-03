@@ -1,0 +1,12 @@
+[Unit]
+Description=Check Git updates for Trendspy Related Keywords
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+RandomizedDelaySec=30s
+Persistent=true
+Unit=trendspy-auto-update.service
+
+[Install]
+WantedBy=timers.target
