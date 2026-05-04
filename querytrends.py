@@ -71,8 +71,10 @@ def get_related_queries(keyword, geo='', timeframe='today 12-m'):
 
 def get_interest_over_time(keyword, geo='', timeframe='now 7-d'):
     """
-    获取单个关键词的时间趋势数据，默认用于邮件里的 7 天小图。
+    获取关键词的时间趋势数据，默认用于邮件里的 7 天趋势摘要。
     """
+    keywords = list(keyword) if isinstance(keyword, (list, tuple, set)) else [keyword]
+
     while True:
         tr = Trends(hl='zh-CN')
 
@@ -96,12 +98,12 @@ def get_interest_over_time(keyword, geo='', timeframe='now 7-d'):
             time.sleep(random.uniform(1, 3))
 
             trend_data = tr.interest_over_time(
-                [keyword],
+                keywords,
                 headers=headers,
                 geo=geo,
                 timeframe=timeframe
             )
-            print(f"成功获取趋势图数据: {keyword}")
+            print(f"成功获取趋势数据: {', '.join(keywords)}")
             return trend_data
         except Exception as e:
             error_msg = str(e)

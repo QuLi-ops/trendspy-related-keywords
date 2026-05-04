@@ -86,6 +86,16 @@ def _extract_interest_series(df, keyword):
         return None
     return series
 
+def _normalize_interest_series(series):
+    """Scale a keyword's series to its own 0-100 range."""
+    if series is None or series.empty:
+        return series
+
+    max_value = float(series.max())
+    if max_value <= 0:
+        return series
+    return (series / max_value) * 100
+
 def summarize_trend_shape(series):
     """Create a short human-readable label for the 7-day curve shape."""
     if series is None or series.empty:
@@ -168,10 +178,41 @@ def build_trend_chart(keyword, directory):
         logging.warning(f"Failed to build trend chart for '{keyword}': {str(e)}")
         return None, "趋势图生成失败"
 
+def build_trend_summaries(keywords):
+    """Fetch batched 7-day trend data and return text summaries by keyword."""
+    summaries = {}
+    timeframe = MONITOR_CONFIG.get('chart_timeframe', 'now 7-d')
+    batch_size = MONITOR_CONFIG.get('trend_summary_batch_size', 5)
+
+    for i in range(0, len(keywords), batch_size):
+        keyword_batch = keywords[i:i + batch_size]
+        try:
+            df = get_interest_over_time(
+                keyword_batch,
+                geo=TRENDS_CONFIG['geo'],
+                timeframe=timeframe
+            )
+            for keyword in keyword_batch:
+                series = _extract_interest_series(df, keyword)
+                series = _normalize_interest_series(series)
+                summaries[keyword] = summarize_trend_shape(series)
+        except Exception as e:
+            logging.warning(
+                f"Failed to build trend summaries for {keyword_batch}: {str(e)}"
+            )
+            for keyword in keyword_batch:
+                summaries[keyword] = "趋势摘要获取失败"
+
+    return summaries
+
 def build_alert_email(batch_trends, directory):
-    """Build a mobile-friendly alert email with one 7-day chart per related query."""
+    """Build a mobile-friendly alert email with text trend summaries."""
     inline_images = {}
     timeframe = MONITOR_CONFIG.get('chart_timeframe', 'now 7-d')
+    related_keywords_for_summary = list(dict.fromkeys(
+        related_keywords for _, related_keywords, _ in batch_trends
+    ))
+    trend_summaries = build_trend_summaries(related_keywords_for_summary)
 
     body = f"""
     <div style="font-family: Arial, Helvetica, sans-serif; color: #111827; line-height: 1.45;">
@@ -179,26 +220,12 @@ def build_alert_email(batch_trends, directory):
         <div style="font-size: 14px; color: #4b5563; margin-bottom: 18px;">
             Time Range: {escape(TRENDS_CONFIG['timeframe'])}<br>
             Region: {escape(TRENDS_CONFIG['geo'] or 'Global')}<br>
-            Chart Range: {escape(timeframe)}
+            Trend Range: {escape(timeframe)}
         </div>
     """
 
     for index, (keyword, related_keywords, value) in enumerate(batch_trends, start=1):
-        chart_path, trend_summary = build_trend_chart(related_keywords, directory)
-        cid = f"trend_chart_{hashlib.md5(f'{related_keywords}-{index}'.encode('utf-8')).hexdigest()}"
-
-        if chart_path:
-            inline_images[cid] = chart_path
-            chart_html = (
-                f'<img src="cid:{cid}" alt="{escape(related_keywords)} 7-day trend" '
-                'style="display: block; width: 100%; max-width: 560px; height: auto; '
-                'border: 1px solid #e5e7eb; border-radius: 6px;">'
-            )
-        else:
-            chart_html = (
-                '<div style="padding: 18px; border: 1px solid #e5e7eb; '
-                'border-radius: 6px; color: #6b7280;">No chart available</div>'
-            )
+        trend_summary = trend_summaries.get(related_keywords, "无可用趋势数据")
 
         body += f"""
         <div style="border: 1px solid #d9dde3; border-radius: 8px; padding: 14px; margin: 0 0 14px 0;">
@@ -211,7 +238,6 @@ def build_alert_email(batch_trends, directory):
             <div style="font-size: 14px; color: #111827; margin-bottom: 10px;">
                 {escape(trend_summary)}
             </div>
-            {chart_html}
         </div>
         """
 

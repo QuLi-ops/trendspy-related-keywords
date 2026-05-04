@@ -308,7 +308,8 @@ SCHEDULE_CONFIG = {
 # Monitoring Configuration
 MONITOR_CONFIG = {
     'rising_threshold': 500,  # 高增长趋势阈值
-    'chart_timeframe': 'now 7-d',  # 邮件提醒中每个相关词的小图时间范围
+    'chart_timeframe': 'now 7-d',  # 邮件提醒中每个相关词的趋势摘要时间范围
+    'trend_summary_batch_size': 5,  # Google Trends 单次最多适合对比 5 个词
 }
 
 # Logging Configuration
