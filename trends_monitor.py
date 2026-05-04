@@ -122,6 +122,12 @@ def summarize_trend_shape(series):
 
     return f"相对平稳，均值 {average:.0f}/100"
 
+def trend_summary_style(summary):
+    """Return inline email CSS for a trend summary label."""
+    if summary.startswith(("仍在高位", "相对平稳")):
+        return "color: #16a34a; font-weight: 700;"
+    return "color: #111827;"
+
 def render_trend_chart(keyword, series, output_path):
     """Render a compact Google-Trends-style 7-day line chart."""
     import matplotlib
@@ -226,6 +232,7 @@ def build_alert_email(batch_trends, directory):
 
     for index, (keyword, related_keywords, value) in enumerate(batch_trends, start=1):
         trend_summary = trend_summaries.get(related_keywords, "无可用趋势数据")
+        summary_style = trend_summary_style(trend_summary)
 
         body += f"""
         <div style="border: 1px solid #d9dde3; border-radius: 8px; padding: 14px; margin: 0 0 14px 0;">
@@ -235,7 +242,7 @@ def build_alert_email(batch_trends, directory):
             <div style="font-size: 14px; color: #4b5563; margin-bottom: 10px;">
                 Base: {escape(keyword)} · Growth: <span style="color: #16a34a; font-weight: 700;">{value}%</span>
             </div>
-            <div style="font-size: 14px; color: #111827; margin-bottom: 10px;">
+            <div style="font-size: 14px; {summary_style} margin-bottom: 10px;">
                 {escape(trend_summary)}
             </div>
         </div>
